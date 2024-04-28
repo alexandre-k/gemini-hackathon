@@ -1,0 +1,13 @@
+
+alex-rogflowx13gv301regv301re.lan {
+
+  tls /keys/alex-rogflowx13gv301regv301re.lan.pem /keys/alex-rogflowx13gv301regv301re.lan-key.pem
+
+  handle_path /api* {
+    reverse_proxy server:8080
+  }
+
+  reverse_proxy frontend:3000
+}
+
+

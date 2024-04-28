@@ -1,0 +1,59 @@
+services:
+
+  proxy:
+    container_name: proxy
+    image: caddy:2.7.6
+    depends_on:
+      - server
+      - frontend
+    volumes:
+      - ./proxy/Caddyfile:/etc/caddy/Caddyfile
+      - ./keys:/keys
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - unblind
+
+
+  server:
+    container_name: server
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    command: go run main.go
+    ports:
+      - '8080:8080'
+    volumes:
+      - './server:/app'
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./server
+          target: /app
+    networks:
+      - unblind
+    env_file: .env
+    environment:
+      API_KEY: $API_KEY
+
+
+  frontend:
+    container_name: frontend
+    build: ./frontend
+    volumes:
+      - './frontend/src:/app/src'
+    ports:
+      - 3000:3000
+    stdin_open: true
+    command: yarn start
+    networks:
+      - unblind
+    env_file: .env
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+      - REACT_APP_API_URL=$API_URL
+
+networks:
+  unblind:
+    external: true

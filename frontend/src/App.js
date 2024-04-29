@@ -2,6 +2,7 @@ import React from "react";
 import axios from 'axios';
 import Container from '@mui/material/Container';
 import Box from '@mui/material/Box';
+import Grid from '@mui/material/Grid';
 import { Brain, Translate } from "@phosphor-icons/react";
 import IconButton from '@mui/material/IconButton';
 import Speech from 'speak-tts' // es6
@@ -12,6 +13,7 @@ import Webcam from "react-webcam";
 
 
 function App() {
+    const [isLoading, setIsLoading] = React.useState(false)
     const dataUrlToBlob = dataUrl => {
         var byteString = atob(dataUrl.split(',')[1]);
         var mimeString = dataUrl.split(',')[0].split(':')[1].split(';')[0];
@@ -31,7 +33,7 @@ function App() {
     }).catch(e => {
         console.error("An error occured while initializing : ", e);
     });
-    const readOutloud = (text) => {
+    const readOutLoud = (text) => {
         speech.speak({
             text,
         }).then(() => {
@@ -43,7 +45,7 @@ function App() {
 
 
     const generateAiResponse = async (action, imageBlob) => {
-        readOutloud("Wait a second...");
+        readOutLoud(`"I will ${action} this, wait a sec!`);
         let formData = new FormData();
         formData.append("image", imageBlob);
         formData.append("imageType", imageBlob.type.split("/")[1]);
@@ -53,30 +55,16 @@ function App() {
             data: formData
         });
         console.log(response.data.content);
-        readOutloud(response.data.content);
+        readOutLoud(response.data.content);
     };
-
-    // useEffect(() => {
-    //     generateAiDescription()
-    // }, []);
-    // const { isPending, isError, data, error } = useQuery({
-    //     queryKey: [],
-    //     queryFn: generateAiDescription,
-    // })
-
-    // if (isPending) {
-    //     return <span>Loading...</span>
-    // }
-
-    // if (isError) {
-    //     return <span>Error: {error.message}</span>
-    // }
 
     const webcamRef = React.useRef(null);
     const capture = React.useCallback(
         (action) => {
+            setIsLoading(true);
             const imageDataUrl = webcamRef.current.getScreenshot();
             generateAiResponse(action, dataUrlToBlob(imageDataUrl));
+            setIsLoading(false);
         },
         [webcamRef]
     );
@@ -86,25 +74,43 @@ function App() {
     };
 
     return (
-        <Container sx={{ bgcolor: '#000', display: 'flex', flexFlow: 'column', alignItems: 'center' }}>
-        <Box sx={{ bgcolor: '#000', height: '100vh', width: '100vh', display: 'flex', alignItems: 'center' }}>
-	        <Webcam
-            id="webcam"
-            ref={webcamRef}
-            audio={false}
-            screenshotFormat="image/jpeg"
-            videoConstraints={videoConstraints}
-          />
-        </Box>
-        <Box sx={{ display: 'flex', justifyContent: 'flex-center', position: 'absolute', bottom: '100px' }}>
-          <IconButton color="primary" size="large" aria-label="fingerprint" color="success" onClick={() => capture("describe")}>
-              <Brain size={64} color="#fff" weight="fill" />
-            </IconButton>
-          <IconButton color="primary" size="large" aria-label="fingerprint" color="success" onClick={() => capture("translate")}>
-              <Translate size={64} color="#fff" weight="fill" />
-            </IconButton>
-        </Box>
-      </Container>
+        <Grid sx={{ backgroundColor: '#000'}} direction="column" justifyContent="center" spacing={0} alignItems="stretch">
+          <Grid item xs={12} sx={{ height: '80vh', textAlign: 'center'}}>
+            <Webcam
+                sx={{ width: '100%', textAlign: 'center'}} 
+                id="webcam"
+                ref={webcamRef}
+                audio={false}
+                screenshotFormat="image/jpeg"
+                videoConstraints={videoConstraints}
+                onClick={()=> readOutLoud('Click on the bottom left to get an overview of what you camera sees, and on the bottom right to have an overview of what is written.')}
+                />
+          </Grid>
+          <Grid container sx={{ height: '20vh'}}>
+            <Grid item xs={6} sx={{ backgroundColor: 'lightGrey', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }} item xs={6}>
+              <IconButton
+                color="primary"
+                size="large"
+                aria-label="imageDescription"
+                color="success"
+                disabled={isLoading}
+                onClick={() => capture("describe")}>
+                <Brain size={64} color="#fff" weight="fill" />
+              </IconButton>
+            </Grid>
+            <Grid item xs={6} sx={{ backgroundColor: 'grey', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'  }} item xs={6}>
+              <IconButton
+                color="primary"
+                size="large"
+                aria-label="imageTranslation"
+                color="success"
+                disabled={isLoading}
+                onClick={() => capture("translate")}>
+                <Translate size={64} color="#fff" weight="fill" />
+              </IconButton>
+            </Grid>
+          </Grid>
+        </Grid>
   );
 }
 

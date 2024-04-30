@@ -27,7 +27,7 @@ function App() {
 
     };
     const speech = new Speech();
-    speech.init().then((data) => {
+    speech.init({"lang": "en-US"}).then((data) => {
         // The "data" object contains the list of available voices and the voice synthesis params
         console.log("Speech is ready, voices are available", data);
     }).catch(e => {

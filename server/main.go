@@ -1,39 +1,42 @@
 package main
 
-import "bytes"
-import "io"
-import "os"
-import "log"
-// import "strings"
-import "context"
-import "fmt"
-import "github.com/google/generative-ai-go/genai"
-import "google.golang.org/api/option"
-// import "github.com/hegedustibor/htgo-tts"
-// import "github.com/hegedustibor/htgo-tts/voices"
-// import htgotts "github.com/hegedustibor/htgo-tts"
-// import handlers "github.com/hegedustibor/htgo-tts/handlers"
-// import voices "github.com/hegedustibor/htgo-tts/voices"
-import "github.com/kataras/iris/v12"
+import (
+	// "bytes"
+	"net/http"
+	// "io"
+	"fmt"
+	"io/ioutil"
+	"os"
+	// "log"
+	"context"
+	"github.com/gin-gonic/gin"
+	"github.com/google/generative-ai-go/genai"
+	"google.golang.org/api/option"
+	// "github.com/rs/zerolog"
+	"github.com/dn365/gin-zerolog"
+	"github.com/rs/zerolog/log"
+)
 
+type AiResponse struct {
+	Content string `json:"content"`
+}
 
+type HealthCheck struct {
+	Status string `json:status`
+}
 
 func getImageAnalysis(contentType string, image []byte, question string) *genai.GenerateContentResponse {
 	ctx := context.Background()
 	// Access your API key as an environment variable (see "Set up your API key" above)
 	client, err := genai.NewClient(ctx, option.WithAPIKey(os.Getenv("API_KEY")))
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal().Err(err)
 	}
 	defer client.Close()
 
 	// For text-and-image input (multimodal), use the gemini-pro-vision model
 	model := client.GenerativeModel("gemini-pro-vision")
 
-	// imgData, err := os.ReadFile("signal-2021-06-23-140030.jpg")
-	// if err != nil {
-	//   log.Fatal(err)
-	// }
 	prompt := []genai.Part{
 		genai.ImageData(contentType, image),
 		genai.Text(question),
@@ -41,101 +44,62 @@ func getImageAnalysis(contentType string, image []byte, question string) *genai.
 	resp, err := model.GenerateContent(ctx, prompt...)
 
 	if err != nil {
-	  log.Fatal(err)
+		log.Fatal().Err(err)
 	}
 
 	return resp
 }
 
-
-// func readText(content string) {
-// 	fmt.Println("Read text: ", content)
-// 	// speech := htgotts.Speech{Folder: "audio", Language: voices.English}
-// 	// speech.Speak(content)
-
-// 	speech := htgotts.Speech{Folder: "audio", Language: voices.English, Handler: &handlers.Native{}}
-// 	fmt.Println("Speak.")
-// 	sentences := strings.Split(content, ".")
-// 	for _, sentence := range sentences {
-// 		speech.Speak(sentence)
-// 	}
-// }
-
-
-type AiResponse struct {
-	Content string `json:"content"`
-}
-
-type Image struct {
-	content []byte
-	contentType string
-
-}
-
-
-func readImage(ctx iris.Context) (string, []byte) {
-	contentType := ctx.FormValue("imageType")
-	fmt.Println("CONTENT TYPE <<<<<<<<<<<<<< ")
-	fmt.Println(contentType)
-	file, _, err := ctx.FormFile("image")
-	defer file.Close()
+func readImage(ctx *gin.Context) (string, []byte) {
+	imageType := ctx.PostForm("imageType")
 	// Expected Content-Type: image/jpeg | image/png | image/svg
-	if err != nil {
-		ctx.StopWithError(iris.StatusBadRequest, err)
-		return "", []byte{}
-	}
+	log.Info().Msgf("[+] Image Type: %s", imageType)
 
-	buf := bytes.NewBuffer(nil)
-	if _, err := io.Copy(buf, file); err != nil {
-		ctx.StopWithError(iris.StatusBadRequest, err)
+	// 	if imageType == nil {
+	// 		ctx.JSON(http.StatusBadRequest, err)
+	// 		return "", []byte{}
+	// 	}
+
+	formFile, err := ctx.FormFile("image")
+	openedFile, _ := formFile.Open()
+	defer openedFile.Close()
+	image, err := ioutil.ReadAll(openedFile)
+	if err != nil {
+		ctx.String(http.StatusBadRequest, "Invalid image err: %s", err.Error())
 		return "", []byte{}
 	}
-	fmt.Println("IMAGE <<<<<<<<<<<<<<<<<<<<<<<")
-	fmt.Println(buf.Bytes())
-	return contentType, buf.Bytes()
+	return imageType, image
 }
 
-func describeImage(ctx iris.Context) {
+func describeImage(ctx *gin.Context) {
 	contentType, imageData := readImage(ctx)
 	question := "Suppose I am blind, tell me what you can see, without saying it is a picture, while speaking naturally."
 	description := readAiResponse(getImageAnalysis(contentType, imageData, question))
-	fmt.Println("description")
-	fmt.Println(description)
-	ctx.JSON(AiResponse{Content: description})
+	log.Debug().Msgf("[+] Description: %s", description)
+	ctx.IndentedJSON(http.StatusOK, AiResponse{Content: description})
 }
 
-
-func translateImage(ctx iris.Context) {
+func translateImage(ctx *gin.Context) {
 	contentType, imageData := readImage(ctx)
 	question := "If there is English text on the image return what you read, if there is text but it is not English return its translation, else mention if you didn't find anything."
 	translation := readAiResponse(getImageAnalysis(contentType, imageData, question))
-	fmt.Println("translation")
-	fmt.Println(translation)
-	ctx.JSON(AiResponse{Content: translation})
+	log.Debug().Msgf("[+] Translation: %s", translation)
+	ctx.IndentedJSON(http.StatusOK, AiResponse{Content: translation})
 }
 
-type HealthCheck struct {
-	Status string `json:status`
+func healthCheck(ctx *gin.Context) {
+	var message HealthCheck
+	message.Status = "It works!"
+	ctx.IndentedJSON(http.StatusOK, message)
 }
 
-func healthCheck(ctx iris.Context) {
-	var h HealthCheck
-	h.Status = "It works!"
-	ctx.JSON(h)
-}
-
-func main () {
-	app := iris.New()
-	geminiApi := app.Party("/gemini")
-	{
-		geminiApi.Get("/", healthCheck)
-		geminiApi.Post("/describe", describeImage)
-		geminiApi.Post("/translate", translateImage)
-	}
-	app.Listen(":8080")
-
-	// image := os.Args[1]
-	// readText(description)
+func main() {
+	router := gin.Default()
+	router.Use(ginzerolog.Logger("gin"))
+	router.GET("/gemini", healthCheck)
+	router.POST("/gemini/describe", describeImage)
+	router.POST("/gemini/translate", translateImage)
+	router.Run(":8080")
 }
 
 func readAiResponse(resp *genai.GenerateContentResponse) string {
@@ -149,4 +113,3 @@ func readAiResponse(resp *genai.GenerateContentResponse) string {
 	}
 	return sentence
 }
-
